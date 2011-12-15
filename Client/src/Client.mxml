@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" minWidth="955" minHeight="600" width="617" height="420">	
+	<fx:Script>
+		<![CDATA[
+			import flash.events.ErrorEvent;
+			import flash.events.Event;
+			import flash.events.IOErrorEvent;
+			import flash.events.ProgressEvent;
+			import flash.net.Socket;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			
+			private var procedures:Object = this;
+			private var socket:Socket = new Socket;
+			private var blockedMsg:Array = new Array;
+			
+			private function setup():void {
+				trace("setup");
+				this.socket.endian = Endian.LITTLE_ENDIAN;
+				this.socket.addEventListener(Event.CONNECT, connected);
+				this.socket.addEventListener(Event.CLOSE, closed);
+				this.socket.addEventListener(IOErrorEvent.IO_ERROR, error);
+				this.socket.addEventListener(ProgressEvent.SOCKET_DATA, recvData);
+				this.socket.connect("127.0.0.1", 6668);
+			}
+			
+			private function login(): void {
+				if (!socket.connected) {
+					setup();
+				}
+				if (this.loginBtn.label == "Login") {
+					var user:String = this.user.text;
+					var pwd:String = this.password.text;
+					
+					if (user.length > 0 && pwd.length > 0) {
+						call("login", [user, pwd]);
+					}	
+				} else if (this.loginBtn.label == "Logout") {
+					
+				}
+			}
+			
+			private var self:Buddy = null;
+			private var buddies:Array = new Array;
+			
+			private function loginSucceed(buddy:Buddy, allBuddies:Array): void {
+				self = buddy;
+				buddies = allBuddies;
+				
+				this.user.visible = false;
+				this.password.visible = false;
+				this.loginBtn.label = "Logout";
+				
+				updateBuddies();
+				call("loadMessage", [self]);
+			}
+			
+			private function loginFailed(message:String):void {
+				Alert.show(message, "ERROR");
+			}
+			
+			private function setMessages(messages:Array):void {
+				var array:ArrayCollection = new ArrayCollection;
+				for each(var message:Message in messages) {
+					array.addItem("[" + message.from + "] -> [" + message.to + "] " + message.message); 
+				}
+				this.messageList.dataProvider = array;
+			}
+			
+			private function addMessage(from:Buddy, to:Buddy, content:String):void {
+				var array:ArrayCollection = this.messageList.dataProvider as ArrayCollection;
+				array.addItem("[" + from + "] -> [" + to + "] " + content);
+			}
+			
+			private function updateBuddies():void {
+				var array:ArrayCollection = new ArrayCollection;
+				for each(var buddy:Buddy in buddies) {
+					array.addItem(buddy.name); 
+				}
+				this.buddyList.dataProvider = array;
+			}
+			
+			private function send(): void {
+				if (this.buddyList.selectedIndex >= 0) {
+					var content:String = this.text.text;
+					if (content.length > 0) {
+						var index:int = this.buddyList.selectedIndex;
+						var buddy:Buddy = buddies[index];
+						call("talk", [self, buddy, content]);	
+					}
+				} else {
+					Alert.show("who do you want to chat with?", "ERROR");
+				}
+			}
+			
+			private function call(funcName:String, params:Array):void {
+				var apc:APC = new APC;
+				
+				params.unshift(0);
+				apc.functionName = funcName;
+				apc.parameters = params;
+				
+				var bytes:ByteArray = new ByteArray();
+				bytes.endian = Endian.LITTLE_ENDIAN;
+				bytes.objectEncoding = ObjectEncoding.AMF3;
+				bytes.writeObject(apc);
+				
+				if (this.socket.connected) {
+					this.socket.writeInt(bytes.length);
+					this.socket.writeBytes(bytes);	
+					this.socket.flush();
+				} else {
+					this.blockedMsg.push(bytes);
+				}
+			}
+			
+			private function connected(event:Event):void {
+				while(this.blockedMsg.length > 0) {
+					var bytes:ByteArray = this.blockedMsg.pop() as ByteArray;
+					this.socket.writeInt(bytes.length);
+					this.socket.writeBytes(bytes);
+					this.socket.flush();
+				}
+				//	this.click.enabled = true;
+			}
+			
+			private function closed(event:Event):void {
+				//	this.click.enabled = true;
+			}
+			
+			private function error(event:IOErrorEvent): void {
+				trace(event);
+			}
+			
+			private var dataLen:int = 0;
+			
+			private function recvData(event:ProgressEvent) : void {
+				while(true) {
+					if (dataLen == 0) {
+						if (socket.bytesAvailable < 4) {
+							break;
+						}
+						dataLen = socket.readInt();
+					} else {
+						if (socket.bytesAvailable < dataLen) {
+							break;
+						}
+						var bytes:ByteArray = new ByteArray();
+						bytes.objectEncoding = ObjectEncoding.AMF3;
+						bytes.endian = Endian.LITTLE_ENDIAN;
+						socket.readBytes(bytes, 0, dataLen); 
+						onPacket(bytes);
+						dataLen = 0;
+					}
+				}
+			}
+			
+			private function onPacket( bytes:ByteArray ):void {
+				bytes.position = 0;
+				try {
+					var rpc:APC = bytes.readObject() as APC;
+					if (rpc != null) {
+						if (this.procedures[rpc.functionName]) {
+							this.procedures[rpc.functionName].apply(this, rpc.parameters);
+						}
+					}
+				} catch(e:Error) {
+					bytes.position = 0;
+					trace(e);
+				}
+			}
+		]]>
+	</fx:Script>
+	
+	<mx:Button click="login()" label="Login" id="loginBtn" x="537" y="10">
+	</mx:Button>
+	<s:TextInput x="361" y="10" id="user" width="80"/>
+	<s:TextInput x="449" y="10" id="password" width="80"/>
+	<mx:HRule x="10" y="39" width="597"/>
+	<s:Button x="537" y="389" label="Send" id="sendBtn" click="send()"/>
+	<s:TextInput x="10" y="389" width="519" id="text"/>
+	<mx:HRule x="10" y="379" width="597"/>
+	<s:List x="10" y="49" width="468" height="322" id="messageList"></s:List>
+	<s:List x="486" y="49" width="121" height="185" id="buddyList"></s:List>
+	
+</s:Application>
