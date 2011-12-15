@@ -1,6 +1,6 @@
 package dao;
 
-
+import java.util.ArrayList;
 import java.util.List;
 
 import common.Context;
@@ -17,6 +17,10 @@ public class Chat {
 	public void login(NetSession scene, int clientid, String name, String password) {
 		// if name is not exist create one
 		SqlSession session = getSqlSession();
+		if (session == null) {
+			scene.call("loginFailed", clientid, name, "database internal error.");
+			return;
+		}
 		try {
 			Buddy buddy = session.findOne("findBuddyByName", Buddy.class, name);
 			if (buddy == null) {
@@ -24,14 +28,14 @@ public class Chat {
 				buddy.setName(name);
 				buddy.setPassword(password);
 				session.persist(buddy);
-			}
-			if (buddy.getId() == 0) {
 				buddy = session.findOne("findBuddyByName", Buddy.class, name);
 			}
-			if (!buddy.getPassword().equals(password)) {
-				scene.call("loginFailed", clientid, name, "password incorrect");
-			} else {
-				scene.call("loginSucceed", clientid, buddy);
+			if (buddy != null) {
+				if (buddy.getPassword().equals(password)) {
+					scene.call("loginSucceed", clientid, buddy);
+				} else {
+					scene.call("loginFailed", clientid, name, "name or password incorrect.");
+				}
 			}
 		} finally {
 			session.close();
@@ -39,11 +43,15 @@ public class Chat {
 	}
 	
 	@Procedure
-	public void loadMessage(NetSession scene, int clientid, Buddy buddy) {
+	public void loadMessage(NetSession scene, int clientid, int buddyId) {
 		SqlSession session = getSqlSession();
+		if (session == null) {
+			scene.call("messageLoaded", clientid, new ArrayList<Message>(0));
+			return;
+		}
 		try {
 			List<Message> messages = 
-					session.find("findMessagesByBuddyId", Message.class, buddy.getId(), buddy.getId());
+					session.find("findMessagesByBuddyId", Message.class, buddyId, buddyId);
 			scene.call("messageLoaded", clientid, messages);
 		} finally {
 			session.close();

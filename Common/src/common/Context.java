@@ -47,8 +47,4 @@ public final class Context {
 		}
 		return (T)this.instances.get(name); 
 	}
-	
-	public boolean contains(String name) {
-		return this.instances.containsKey(name);
-	}
 }

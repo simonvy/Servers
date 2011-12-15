@@ -17,7 +17,6 @@ import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 
 import common.net.APC;
 import common.net.NetSession;
-import common.net.ObjectRPCHandler;
 import common.net.Server;
 import common.net.SessionHandler;
 
@@ -37,20 +36,7 @@ public class SceneServer extends Server {
 		database.setOption("keepAlive", true);
 		database.setOption("bufferFactory", HeapChannelBufferFactory.getInstance(Server.BYTE_ORDER));
 		
-		database.setPipelineFactory(dbChannelPipelineFactory(this));
-	}
-	
-	private ChannelPipelineFactory dbChannelPipelineFactory(final SceneServer host) {
-		return new ChannelPipelineFactory() {
-			@Override
-			public ChannelPipeline getPipeline() throws Exception {
-				return Channels.pipeline(
-					new DbSessionHandler(host),
-					new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
-					new ObjectRPCHandler(host)
-				);
-			}
-		};
+		database.setPipelineFactory(super.clientChannelPipelineFactory(this));
 	}
 	
 	@Override
@@ -73,6 +59,7 @@ public class SceneServer extends Server {
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
 				if (future.isSuccess()) {
+					databaseChannelConnected(future.getChannel());
 					start(port);
 					System.out.println("> server started.");
 				} else {
@@ -82,14 +69,24 @@ public class SceneServer extends Server {
 		});
 	}
 	
-	public void setDbChannel(Channel dbChannel) {
-		dbSession = new DbSession(dbChannel.getId(), dbChannel);
+	private void databaseChannelConnected(Channel dbChannel) {
+		// when db channel is connected, netty will first fire channel open event,
+		// then set the connection future completed.
+		// as a result, when this method is called, db channel has already been added into the client pool,
+		// Have to remove it.
+		super.removeChildChannel(dbChannel);
+		this.dbSession = new DbSession(dbChannel.getId(), dbChannel);
 		System.out.println("> database is connected.");
 	}
 	
-	public void removeDbChannel(Channel dbChannel) {
-		dbSession = null;
-		System.out.println("> database is disconnected.");
+	@Override
+	public void removeChildChannel(Channel child) {
+		if (dbSession != null && dbSession.getId() == child.getId()) {
+			this.dbSession = null;
+			System.out.println("> database is disconnected.");
+		} else {
+			super.removeChildChannel(child);
+		}
 	}
 	
 	public NetSession getDbSession() {
@@ -98,23 +95,19 @@ public class SceneServer extends Server {
 	
 	@Override
 	public void invokeProcedure(Channel channel, APC apc) {
-		if (dbSession != null && dbSession.getChannel().getId() == channel.getId()) {
+		if (dbSession != null && dbSession.getId() == channel.getId()) {
 			// always use the last parameter as the client id
 			Object[] params = apc.getParameters();
 			if (params != null && params.length > 0) {
 				Object first = params[0];
 				if (first instanceof Integer) {
-					NetSession client = sessions.get(first);
-					if (client != null) {
-						rpcManager.invokeProcedure(client, apc);
-					} else {
-						System.err.println("" + first + " is disconnected!");
-					}
+					Channel client = super.getChildChannel((Integer)first);
+					super.invokeProcedure(client, apc);
 				} else {
-					throw new IllegalStateException("is not integer?");
+					throw new IllegalStateException("is not integer from database?");
 				}
 			} else {
-				rpcManager.invokeProcedure(dbSession, apc);
+				super.invokeProcedure(null, apc);
 			}
 		} else {
 			super.invokeProcedure(channel, apc);
@@ -125,8 +118,8 @@ public class SceneServer extends Server {
 	public void stop() {
 		super.stop();
 		if (dbSession != null) {
-			ChannelFuture closeFuture = dbSession.getChannel().close();
-			closeFuture.awaitUninterruptibly();
+			dbSession.close();
 		}
+		System.out.println("> server stopped.");
 	}
 }

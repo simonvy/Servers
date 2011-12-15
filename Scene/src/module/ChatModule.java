@@ -32,9 +32,13 @@ public class ChatModule {
 			return;
 		}
 		
-		this.occupiedName.add(name);
 		NetSession database = getDbSession();
-		database.call("login", client.getId(), name, password);
+		if (database != null) {
+			this.occupiedName.add(name);
+			database.call("login", client.getId(), name, password);
+		} else {
+			client.call("loginFailed", "server internal error.");
+		}
 	}
 	
 	@Procedure
@@ -69,7 +73,9 @@ public class ChatModule {
 			return;
 		}
 		NetSession database = getDbSession();
-		database.call("loadMessage", client.getId(), buddy.getId());
+		if (database != null) {
+			database.call("loadMessage", client.getId(), buddy.getId());
+		}
 	}
 	
 	@Procedure

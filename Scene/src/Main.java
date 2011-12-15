@@ -24,8 +24,6 @@ public class Main {
 			e.printStackTrace(System.err);
 		} finally {
 			server.stop();
-			System.out.println("> Server stopped!");
 		}
 	}
-
 }

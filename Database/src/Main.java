@@ -8,7 +8,7 @@ import database.SqlSessionFactory;
 
 public class Main {
 
-	public static void main(String[] args) throws SQLException {
+	public static void main(String[] args) {
 		
 		Server server = Context.instance().register(Server.class);
 		SqlSessionFactory ssf = Context.instance().register(SqlSessionFactory.class);
@@ -30,7 +30,11 @@ public class Main {
 			e.printStackTrace(System.err);
 		} finally {
 			server.stop();
-			ssf.close();
+			try {
+				ssf.close();
+			} catch (SQLException e) {
+				e.printStackTrace(System.err);
+			}
 			System.out.println("> Database stopped!");
 		}
 	}

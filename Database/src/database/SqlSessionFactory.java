@@ -31,7 +31,10 @@ public class SqlSessionFactory {
 		if (connection == null) {
 			connect();
 		}
-		return new SqlSession(this);
+		if (connection != null) {
+			return new SqlSession(this);
+		}
+		return null;
 	}
 	
 	private void connect() {
@@ -44,7 +47,7 @@ public class SqlSessionFactory {
 			Class.forName(driver);
 			this.connection = DriverManager.getConnection(url, user, password);
 		} catch (Exception e) {
-			throw new IllegalStateException(e);
+			e.printStackTrace(System.err);
 		}
 	}
 	
@@ -77,7 +80,7 @@ public class SqlSessionFactory {
 		return entityMeta.get(entityClass);
 	}
 	
-	public PreparedStatement getStatement(String queryName) throws SQLException {
+	public PreparedStatement getNamedStatement(String queryName) throws SQLException {
 		PreparedStatement stmt = connection.prepareStatement(namedQueries.get(queryName));
 		return stmt;
 	}

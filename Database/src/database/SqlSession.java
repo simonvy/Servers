@@ -23,7 +23,7 @@ public class SqlSession {
 		EntityMeta meta = factory.getEntityMeta(entityClass);
 		
 		try {
-			PreparedStatement stmt = factory.getStatement(queryName);
+			PreparedStatement stmt = factory.getNamedStatement(queryName);
 			prepareParameters(stmt, params);
 			ResultSet rs = null;
 			try {
@@ -60,7 +60,6 @@ public class SqlSession {
 	}
 	
 	public void persist(Object entity) {
-		// simple one
 		Class<?> entityClass = entity.getClass();
 		EntityMeta meta = factory.getEntityMeta(entityClass);
 

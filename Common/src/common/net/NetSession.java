@@ -1,6 +1,7 @@
 package common.net;
 
 import org.jboss.netty.channel.Channel;
+import org.jboss.netty.channel.ChannelFuture;
 
 public class NetSession {
 
@@ -18,14 +19,21 @@ public class NetSession {
 		apc.setFunctionName(funcName);
 		apc.setParameters(params);
 		
-		channel.write(apc);
+		if (channel.isWritable()) {
+			channel.write(apc);
+		}
+	}
+	
+	public int getId() {
+		return this.sessionid;
 	}
 	
 	public Channel getChannel() {
 		return this.channel;
 	}
 	
-	public int getId() {
-		return this.sessionid;
+	public void close() {
+		ChannelFuture closeFuture = channel.close();
+		closeFuture.awaitUninterruptibly();
 	}
 }

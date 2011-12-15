@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
-public final class AsynchronousProcedureQueue {
+class AsynchronousProcedureQueue {
 	
 	private Map<String, Pair> knownProcedures = new HashMap<String, Pair>();
 	private ExecutorService executor;
