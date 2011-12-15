@@ -14,32 +14,37 @@
 			import mx.controls.Alert;
 			
 			private var procedures:Object = this;
-			private var socket:Socket = new Socket;
+			private var socket:Socket;
 			private var blockedMsg:Array = new Array;
 			
-			private function setup():void {
-				trace("setup");
-				this.socket.endian = Endian.LITTLE_ENDIAN;
-				this.socket.addEventListener(Event.CONNECT, connected);
-				this.socket.addEventListener(Event.CLOSE, closed);
-				this.socket.addEventListener(IOErrorEvent.IO_ERROR, error);
-				this.socket.addEventListener(ProgressEvent.SOCKET_DATA, recvData);
+			private function connect():void {
+				if (socket == null) {
+					socket = new Socket;
+					this.socket.endian = Endian.LITTLE_ENDIAN;
+					this.socket.addEventListener(Event.CONNECT, connected);
+					this.socket.addEventListener(Event.CLOSE, closed);
+					this.socket.addEventListener(IOErrorEvent.IO_ERROR, error);
+					this.socket.addEventListener(ProgressEvent.SOCKET_DATA, recvData);
+				}
 				this.socket.connect("127.0.0.1", 6668);
 			}
 			
 			private function login(): void {
-				if (!socket.connected) {
-					setup();
-				}
 				if (this.loginBtn.label == "Login") {
+					if (socket == null || !socket.connected) {
+						connect();
+					}
 					var user:String = this.user.text;
 					var pwd:String = this.password.text;
 					
 					if (user.length > 0 && pwd.length > 0) {
 						call("login", [user, pwd]);
+						this.user.enabled = false;
+						this.password.enabled = false;
+						this.loginBtn.enabled = false;
 					}	
 				} else if (this.loginBtn.label == "Logout") {
-					
+					this.socket.close();
 				}
 			}
 			
@@ -53,6 +58,10 @@
 				this.user.visible = false;
 				this.password.visible = false;
 				this.loginBtn.label = "Logout";
+				this.loginBtn.enabled = true;
+				
+				this.sendBtn.enabled = true;
+				this.textInput.enabled = true;
 				
 				updateBuddies();
 				call("loadMessage", [self]);
@@ -60,6 +69,9 @@
 			
 			private function loginFailed(message:String):void {
 				Alert.show(message, "ERROR");
+				this.user.enabled = true;
+				this.password.enabled = true;
+				this.loginBtn.enabled = true;
 			}
 			
 			private function setMessages(messages:Array):void {
@@ -85,7 +97,7 @@
 			
 			private function send(): void {
 				if (this.buddyList.selectedIndex >= 0) {
-					var content:String = this.text.text;
+					var content:String = this.textInput.text;
 					if (content.length > 0) {
 						var index:int = this.buddyList.selectedIndex;
 						var buddy:Buddy = buddies[index];
@@ -108,7 +120,7 @@
 				bytes.objectEncoding = ObjectEncoding.AMF3;
 				bytes.writeObject(apc);
 				
-				if (this.socket.connected) {
+				if (this.socket != null && this.socket.connected) {
 					this.socket.writeInt(bytes.length);
 					this.socket.writeBytes(bytes);	
 					this.socket.flush();
@@ -124,11 +136,17 @@
 					this.socket.writeBytes(bytes);
 					this.socket.flush();
 				}
-				//	this.click.enabled = true;
 			}
 			
 			private function closed(event:Event):void {
-				//	this.click.enabled = true;
+				this.sendBtn.enabled = false;
+				this.textInput.enabled = false;
+				
+				this.user.enabled = true;
+				this.password.enabled = true;
+				this.user.visible = true;
+				this.password.visible = true;
+				this.loginBtn.label = "Login";
 			}
 			
 			private function error(event:IOErrorEvent): void {
@@ -165,6 +183,8 @@
 					if (rpc != null) {
 						if (this.procedures[rpc.functionName]) {
 							this.procedures[rpc.functionName].apply(this, rpc.parameters);
+						} else {
+							trace(rpc.functionName + " is not registered.");
 						}
 					}
 				} catch(e:Error) {
@@ -180,10 +200,10 @@
 	<s:TextInput x="361" y="10" id="user" width="80"/>
 	<s:TextInput x="449" y="10" id="password" width="80"/>
 	<mx:HRule x="10" y="39" width="597"/>
-	<s:Button x="537" y="389" label="Send" id="sendBtn" click="send()"/>
-	<s:TextInput x="10" y="389" width="519" id="text"/>
+	<s:Button x="537" y="389" label="Send" id="sendBtn" click="send()" enabled="false"/>
+	<s:TextInput x="10" y="389" width="519" id="textInput" enabled="false"/>
 	<mx:HRule x="10" y="379" width="597"/>
-	<s:List x="10" y="49" width="468" height="322" id="messageList"></s:List>
-	<s:List x="486" y="49" width="121" height="185" id="buddyList"></s:List>
+	<s:List x="10" y="49" width="485" height="322" id="messageList"></s:List>
+	<s:List x="503" y="49" width="104" height="322" id="buddyList"></s:List>
 	
 </s:Application>

@@ -7,6 +7,7 @@ public class NetSession {
 
 	private int sessionid;
 	private Channel channel;
+	public Object attachment;
 	
 	public NetSession(int sessionid, Channel channel) {
 		this.channel = channel;

@@ -114,6 +114,11 @@ public class Server {
 	
 	public void removeChildChannel(Channel child) {
 		synchronized(sessions) {
+			// fire a disconnected apc so that module can handle this
+			APC apc = new APC();
+			apc.setFunctionName("disconnected");
+			invokeProcedure(child, apc);
+			
 			clients.remove(child);
 			sessions.remove(child.getId());
 		}
