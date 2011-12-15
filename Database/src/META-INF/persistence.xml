@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence>
+	<persistence-unit name="default">
+    	<properties>
+    		<property name="driver" value="com.mysql.jdbc.Driver"/>
+      		<property name="url" value="jdbc:mysql://localhost:3306/people"/>
+      		<property name="user" value="root"/>
+      		<property name="password" value="root"/>
+     	</properties>
+     	<queries>
+     		<query name="findBuddyByName">
+     			SELECT * from buddy where name = ?
+     		</query>
+     		<query name="findMessagesByBuddyId">
+     			SELECT * from message where message.from = ? or message.to = ?
+     		</query>
+     	</queries> 
+  	</persistence-unit>
+</persistence>
