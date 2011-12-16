@@ -14,7 +14,7 @@ public class Main {
 		server.registerProcedures(ChatModule.class);
 		
 		try {
-			server.start(6668, "localhost", 6669);
+			server.start(6668, 843, "localhost", 6669);
 			
 			synchronized(server) {
 				server.wait();

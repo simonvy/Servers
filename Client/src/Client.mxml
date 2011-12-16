@@ -13,14 +13,14 @@
 			import mx.collections.ArrayCollection;
 			import mx.controls.Alert;
 			
+			private const host:String = "192.168.0.81";
 			private var procedures:Object = this;
 			private var socket:Socket = new Socket;
 			private var blockedMsg:Array = new Array;
 			
 			private function init():void {
-				trace("init");
 				this.textInput.addEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
-				
+				Security.allowDomain("*");
 				this.socket.endian = Endian.LITTLE_ENDIAN;
 				this.socket.addEventListener(Event.CONNECT, connected);
 				this.socket.addEventListener(Event.CLOSE, closed);
@@ -31,7 +31,7 @@
 			private function login(): void {
 				if (this.loginBtn.label == "Login") {
 					if (!socket.connected) {
-						this.socket.connect("127.0.0.1", 6668);
+						this.socket.connect(host, 6668);
 					}
 					var user:String = this.user.text;
 					var pwd:String = this.password.text;
@@ -42,7 +42,9 @@
 						this.password.enabled = false;
 						this.loginBtn.enabled = false;
 						this.password.text = "";
-					}	
+					} else {	
+						Alert.show("user or password is empty.", "ERROR");
+					}
 				} else if (this.loginBtn.label == "Logout") {
 					this.socket.close();
 					closed(null);

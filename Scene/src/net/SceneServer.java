@@ -4,15 +4,17 @@ import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 
 import org.jboss.netty.bootstrap.ClientBootstrap;
+import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.buffer.HeapChannelBufferFactory;
 import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
+import org.jboss.netty.handler.codec.frame.FixedLengthFrameDecoder;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 
 import common.net.APC;
@@ -25,18 +27,26 @@ public class SceneServer extends Server {
 	private NetSession dbSession;
 	private ClientBootstrap database;
 	
-	public SceneServer() {
-		ChannelFactory factory = new NioClientSocketChannelFactory(
-				Executors.newCachedThreadPool(),
-				Executors.newCachedThreadPool());
-		
-		database = new ClientBootstrap(factory);
+	private ServerBootstrap policyServer;
+	private Channel policyChannel;
+	
+	public SceneServer() {		
+		database = new ClientBootstrap(new NioClientSocketChannelFactory(
+				Executors.newCachedThreadPool(), Executors.newCachedThreadPool()
+		));
 		
 		database.setOption("tcpNoDelay", true);
 		database.setOption("keepAlive", true);
 		database.setOption("bufferFactory", HeapChannelBufferFactory.getInstance(Server.BYTE_ORDER));
 		
 		database.setPipelineFactory(super.clientChannelPipelineFactory(this));
+		
+		policyServer = new ServerBootstrap(new NioServerSocketChannelFactory(
+				Executors.newCachedThreadPool(), Executors.newCachedThreadPool()
+		));
+		policyServer.setPipeline(Channels.pipeline(
+				new FixedLengthFrameDecoder(22),  // <policy-file-request/>
+				new PolicyRequestHandler()));
 	}
 	
 	@Override
@@ -53,7 +63,7 @@ public class SceneServer extends Server {
 		};
 	}
 	
-	public void start(final int port, String db, int dbport) {
+	public void start(final int port, final int pport, String db, int dbport) {
 		ChannelFuture future = this.database.connect(new InetSocketAddress(db, dbport));
 		future.addListener(new ChannelFutureListener() {
 			@Override
@@ -61,6 +71,8 @@ public class SceneServer extends Server {
 				if (future.isSuccess()) {
 					databaseChannelConnected(future.getChannel());
 					start(port);
+					// start policy server
+					policyChannel = policyServer.bind(new InetSocketAddress(pport));
 					System.out.println("> server started.");
 				} else {
 					System.out.println("> cannot connect database.");
@@ -103,12 +115,10 @@ public class SceneServer extends Server {
 				if (first instanceof Integer) {
 					Channel client = super.getChildChannel((Integer)first);
 					super.invokeProcedure(client, apc);
-				} else {
-					throw new IllegalStateException("is not integer from database?");
+					return;
 				}
-			} else {
-				super.invokeProcedure(null, apc);
 			}
+			super.invokeProcedure(null, apc);
 		} else {
 			super.invokeProcedure(channel, apc);
 		}
@@ -119,6 +129,14 @@ public class SceneServer extends Server {
 		super.stop();
 		if (dbSession != null) {
 			dbSession.close();
+		}
+		if (policyChannel != null) {
+			policyChannel.close().addListener(new ChannelFutureListener() {
+				@Override
+				public void operationComplete(ChannelFuture future) throws Exception {
+					policyServer.releaseExternalResources();
+				}
+			});
 		}
 		System.out.println("> server stopped.");
 	}
