@@ -6,6 +6,10 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.persistence.Column;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Table;
+
 public class EntityMeta {
 
 	private Class<?> clazz;
@@ -19,32 +23,66 @@ public class EntityMeta {
 		this.columns = new HashMap<String, Field>();
 		this.setters = new HashMap<String, Method>();
 		this.getters = new HashMap<String, Method>();
+		
+		setTable(this.clazz);
+		addColumns(this.clazz);
 	}
 
-	public void setTable(String table) {
-		this.table = table;
+	private void setTable(Class<?> clazz) {
+		Table t = clazz.getAnnotation(Table.class);
+		if (t == null) {
+			throw new IllegalStateException("entity is not mapped with table.");
+		}
+		table = t.name();
+	}
+	
+	private void addColumns(Class<?> clazz) {
+		Field[] fields = clazz.getDeclaredFields();
+		for (Field field : fields) {
+			Column c = field.getAnnotation(Column.class);
+			if (c == null) {
+				continue;
+			}
+			String columnName = c.name();
+			if (c.name().length() == 0) {
+				columnName = field.getName();
+			}
+			if (columns.containsKey(columnName)) {
+				throw new IllegalStateException("duplicate " + columnName + " " + clazz.getName());
+			}
+			columns.put(columnName, field);
+		}
+		if (clazz.getSuperclass() != null) {
+			addColumns(clazz.getSuperclass());
+		}
 	}
 	
 	public String getTable() {
 		return this.table;
 	}
 	
-	public void addColumn(String columnName, Field field) {
-		if (columns.containsKey(columnName)) {
-			throw new IllegalStateException("duplicate " + columnName + " " + clazz.getName());
-		}
-		columns.put(columnName, field);
-	}
-	
-	public Collection<String> getColumn() {
+	public Collection<String> getColumns() {
 		return columns.keySet();
 	}
 	
-	public Field getColumnField(String columnName) {
-		return columns.get(columnName);
+	public Class<?> getColumnType(String column) {
+		if (!columns.containsKey(column)) {
+			return null;
+		}
+		return columns.get(column).getType();
+	}
+	
+	public boolean isGeneratedColumn(String column) {
+		if (!columns.containsKey(column)) {
+			return true;
+		}
+		return columns.get(column).getAnnotation(GeneratedValue.class) != null;
 	}
 	
 	public void setValue(Object host, String column, Object value) {
+		if (!columns.containsKey(column)) {
+			return;
+		}
 		if (!setters.containsKey(column)) {
 			String setterName = "set" + column.substring(0, 1).toUpperCase() + column.substring(1);
 			try {
@@ -63,6 +101,9 @@ public class EntityMeta {
 	}
 
 	public Object getValue(Object host, String column) {
+		if (!columns.containsKey(column)) {
+			return null;
+		}
 		if (!getters.containsKey(column)) {
 			String getterName = "get" + column.substring(0, 1).toUpperCase() + column.substring(1);
 			try {

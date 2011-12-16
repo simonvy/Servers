@@ -1,7 +1,6 @@
 package database;
 
 import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -10,8 +9,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import javax.persistence.Column;
-import javax.persistence.Table;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -59,23 +56,7 @@ public class SqlSessionFactory {
 	
 	public EntityMeta getEntityMeta(Class<?> entityClass) {
 		if (!entityMeta.containsKey(entityClass)) {
-			EntityMeta meta = new EntityMeta(entityClass);
-			
-			Table table = entityClass.getAnnotation(Table.class);
-			meta.setTable(table.name());	
-			Field[] fields = entityClass.getDeclaredFields();
-			for (Field field : fields) {
-				Column column = field.getAnnotation(Column.class);
-				if (column != null) {
-					String columnName = column.name();
-					if (columnName.length() == 0) {
-						columnName = field.getName();
-					}
-					meta.addColumn(columnName, field);
-				}
-			}
-			
-			entityMeta.put(entityClass, meta);
+			entityMeta.put(entityClass, new EntityMeta(entityClass));
 		}
 		return entityMeta.get(entityClass);
 	}

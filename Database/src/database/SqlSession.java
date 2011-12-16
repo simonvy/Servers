@@ -1,14 +1,11 @@
 package database;
 
-import java.lang.reflect.Field;
 import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
-
-import javax.persistence.GeneratedValue;
 
 public class SqlSession {
 
@@ -24,23 +21,19 @@ public class SqlSession {
 		
 		try {
 			PreparedStatement stmt = factory.getNamedStatement(queryName);
-			prepareParameters(stmt, params);
-			ResultSet rs = null;
+			parameterize(stmt, params);
 			try {
-				rs = stmt.executeQuery();
+				ResultSet rs = stmt.executeQuery();
 				while (rs.next()) {
 					T host = entityClass.newInstance();
-					for (String column : meta.getColumn()) {
-						Class<?> type = meta.getColumnField(column).getType();
-						Object value = getProperValue(rs, column, type);
+					for (String column : meta.getColumns()) {
+						Class<?> type = meta.getColumnType(column);
+						Object value = castValue(rs, column, type);
 						meta.setValue(host, column, value);
 					}
 					result.add(host);
 				}
 			} finally {
-				if (rs != null) {
-					rs.close();
-				}
 				stmt.close();
 			}
 		} catch (SQLException e) {
@@ -71,9 +64,8 @@ public class SqlSession {
 		String values = "";
 		
 		boolean first = true;
-		for (String column : meta.getColumn()) {
-			Field field = meta.getColumnField(column);
-			if (!field.isAnnotationPresent(GeneratedValue.class)) {
+		for (String column : meta.getColumns()) {
+			if (!meta.isGeneratedColumn(column)) {
 				if (!first) {
 					sql.append(", ");
 					values += ", ";
@@ -91,7 +83,7 @@ public class SqlSession {
 		try {
 			PreparedStatement stmt = factory.getSqlStatement(sql.toString());
 			try {
-				prepareParameters(stmt, valueObjects.toArray());
+				parameterize(stmt, valueObjects.toArray());
 				stmt.execute();
 			} finally {
 				stmt.close();
@@ -101,7 +93,7 @@ public class SqlSession {
 		}
 	}
 	
-	private static void prepareParameters(PreparedStatement stmt, Object[] params) throws SQLException {
+	private void parameterize(PreparedStatement stmt, Object[] params) throws SQLException {
 		for (int i = 1; i <= params.length; i++) {
 			Object param = params[i - 1];
 			if (param instanceof Integer) {
@@ -118,12 +110,12 @@ public class SqlSession {
 		}
 	}
 	
-	private static Object getProperValue(ResultSet rs, String column, Class<?> type) throws SQLException {
-		if (type == int.class || type == Integer.class) {
+	private Object castValue(ResultSet rs, String column, Class<?> type) throws SQLException {
+		if (type == Integer.class) {
 			return rs.getInt(column);
 		} else if (type == String.class) {
 			return rs.getString(column);
-		} else if (type == double.class || type == Double.class) {
+		} else if (type == Double.class) {
 			return rs.getDouble(column);
 		} else if (type == Date.class) {
 			return rs.getDate(column);
