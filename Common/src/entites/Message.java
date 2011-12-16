@@ -4,12 +4,13 @@ import java.io.Serializable;
 
 import javax.persistence.Column;
 import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
 import javax.persistence.Table;
 
 @Table(name="message")
 public class Message implements Serializable {
 	
-	@Column @GeneratedValue private Integer id;
+	@Column @GeneratedValue @Id private Integer id;
 	@Column private Integer sender;
 	@Column private Integer receiver;
 	@Column private String text;

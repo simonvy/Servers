@@ -2,13 +2,14 @@ package entites;
 
 import javax.persistence.Column;
 import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
 import javax.persistence.Table;
 import java.io.Serializable;
 
 @Table(name="buddy")
 public class Buddy implements Serializable {
 
-	@Column @GeneratedValue private Integer id;
+	@Column @GeneratedValue @Id private Integer id;
 	@Column private String name;
 	@Column private String password;
 	

@@ -7,7 +7,9 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
-public class SqlSession {
+import javax.persistence.EntityManager;
+
+public class SqlSession implements EntityManager {
 
 	private SqlSessionFactory factory;
 	
@@ -15,43 +17,26 @@ public class SqlSession {
 		this.factory = factory;
 	}
 	
-	public <T> List<T> find(String queryName, Class<T> entityClass, Object... params) {
-		List<T> result = new ArrayList<T>();
-		EntityMeta meta = factory.getEntityMeta(entityClass);
-		
-		try {
-			PreparedStatement stmt = factory.getNamedStatement(queryName);
-			parameterize(stmt, params);
-			try {
-				ResultSet rs = stmt.executeQuery();
-				while (rs.next()) {
-					T host = entityClass.newInstance();
-					for (String column : meta.getColumns()) {
-						Class<?> type = meta.getColumnType(column);
-						Object value = castValue(rs, column, type);
-						meta.setValue(host, column, value);
-					}
-					result.add(host);
-				}
-			} finally {
-				stmt.close();
-			}
-		} catch (SQLException e) {
-			e.printStackTrace(System.err);
-		} catch (Exception e) {
-			throw new IllegalStateException(e);
-		}
-		return result;
-	}
-	
-	public <T> T findOne(String queryName, Class<T> entityClass, Object... params) {
-		List<T> objects = find(queryName, entityClass, params);
-		if (objects != null && objects.size() > 0) {
-			return objects.get(0);
-		}
+	@Override
+	public <T> T find(Class<T> entityClass, Object oid) {
 		return null;
 	}
 	
+	@Override
+	public void remove(Object entity) {
+		
+	}
+	
+	public void update(Object entity) {
+		
+	}
+	
+	@Override
+	public void refresh(Object entity) {
+		
+	}
+	
+	@Override
 	public void persist(Object entity) {
 		Class<?> entityClass = entity.getClass();
 		EntityMeta meta = factory.getEntityMeta(entityClass);
@@ -93,6 +78,43 @@ public class SqlSession {
 		}
 	}
 	
+	public <T> List<T> find(String queryName, Class<T> entityClass, Object... params) {
+		List<T> result = new ArrayList<T>();
+		EntityMeta meta = factory.getEntityMeta(entityClass);
+		
+		try {
+			PreparedStatement stmt = factory.getNamedStatement(queryName);
+			parameterize(stmt, params);
+			try {
+				ResultSet rs = stmt.executeQuery();
+				while (rs.next()) {
+					T host = entityClass.newInstance();
+					for (String column : meta.getColumns()) {
+						Class<?> type = meta.getColumnType(column);
+						Object value = castValue(rs, column, type);
+						meta.setValue(host, column, value);
+					}
+					result.add(host);
+				}
+			} finally {
+				stmt.close();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace(System.err);
+		} catch (Exception e) {
+			throw new IllegalStateException(e);
+		}
+		return result;
+	}
+	
+	public <T> T findOne(String queryName, Class<T> entityClass, Object... params) {
+		List<T> objects = find(queryName, entityClass, params);
+		if (objects != null && objects.size() > 0) {
+			return objects.get(0);
+		}
+		return null;
+	}
+	
 	private void parameterize(PreparedStatement stmt, Object[] params) throws SQLException {
 		for (int i = 1; i <= params.length; i++) {
 			Object param = params[i - 1];
@@ -125,7 +147,13 @@ public class SqlSession {
 		return null;
 	}
 	
+	@Override
 	public void close() {
 		this.factory = null;
+	}
+
+	@Override
+	public boolean isOpen() {
+		return this.factory != null;
 	}
 }

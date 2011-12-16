@@ -52,9 +52,6 @@ public class EntityMeta {
 			}
 			columns.put(columnName, field);
 		}
-		if (clazz.getSuperclass() != null) {
-			addColumns(clazz.getSuperclass());
-		}
 	}
 	
 	public String getTable() {
