@@ -58,6 +58,18 @@ public class Chat {
 		}
 	}
 	
+	@Procedure
+	public void saveMessage(NetSession scene, Message message) {
+		SqlSession session = getSqlSession();
+		if (session != null) {
+			try {
+				session.persist(message);
+			} finally {
+				session.close();
+			}
+		}
+	}
+	
 	public SqlSession getSqlSession() {
 		SqlSessionFactory factory = Context.instance().get(SqlSessionFactory.class);
 		return factory.openSession();

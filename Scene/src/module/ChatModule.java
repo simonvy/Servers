@@ -51,6 +51,13 @@ public class ChatModule {
 	@Procedure
 	public void loginSucceed(NetSession client, Buddy buddy) {
 		this.occupiedName.remove(buddy.getName());
+		
+		Buddy copyBuddy = new Buddy();
+		copyBuddy.setId(buddy.getId());
+		copyBuddy.setName(buddy.getName());
+		copyBuddy.setPassword("");
+		notifyAll("addBuddy", copyBuddy);
+		
 		this.sessions.put(buddy.getName(), client);
 		client.attachment = buddy;
 		
@@ -59,7 +66,7 @@ public class ChatModule {
 			if (session != client) {
 				if (session.attachment != null) {
 					Buddy b = (Buddy) session.attachment;
-					Buddy copyBuddy = new Buddy();
+					copyBuddy = new Buddy();
 					copyBuddy.setId(b.getId());
 					copyBuddy.setName(b.getName());
 					copyBuddy.setPassword("");
@@ -67,7 +74,7 @@ public class ChatModule {
 				}
 			}
 		}
-		client.call("loginSucceed", buddy, allBuddies.toArray());
+		client.call("loginSucceed", buddy, (Object)allBuddies.toArray());
 	}
 	
 	@Procedure
@@ -84,15 +91,34 @@ public class ChatModule {
 	
 	@Procedure
 	public void messageLoaded(NetSession client, List<Message> messages) {
-		client.call("setMessages", (Object[])messages.toArray());
+		client.call("setMessages", (Object)messages.toArray());
 	}
 	
 	@Procedure
-	public void talk(NetSession client, Buddy from, Buddy to, String content) {
-		from.setPassword("");
-		to.setPassword("");
+	public void talk(NetSession client, Buddy sender, Buddy receiver, String content) {
+		sender.setPassword("");
+		receiver.setPassword("");
+		
+		Message message = new Message();
+		message.setSender(sender.getId());
+		message.setReceiver(receiver.getId());
+		message.setText(content);
+		
 		// 1. send message back to from/to
+		NetSession fromSession = sessions.get(sender.getName());
+		NetSession toSession = sessions.get(receiver.getName());
+		if (fromSession != null) {
+			fromSession.call("addMessage", message);
+		}
+		if (toSession != null) {
+			toSession.call("addMessage", message);
+		}
+		
 		// 2. add message to database
+		NetSession database = getDbSession();
+		if (database != null) {
+			database.call("saveMessage", message);
+		}
 	}
 	
 	@Procedure
@@ -101,6 +127,14 @@ public class ChatModule {
 			Buddy buddy = (Buddy)client.attachment;
 			this.sessions.remove(buddy.getName());
 			client.attachment = null;
+			buddy.setPassword("");
+			notifyAll("removeBuddy", buddy);
+		}
+	}
+	
+	private void notifyAll(String funcName, Object...params) {
+		for(NetSession session : sessions.values()) {
+			session.call(funcName, params);
 		}
 	}
 	

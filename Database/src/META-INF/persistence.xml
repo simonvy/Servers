@@ -12,7 +12,7 @@
      			SELECT * from buddy where name = ?
      		</query>
      		<query name="findMessagesByBuddyId">
-     			SELECT * from message where message.from = ? or message.to = ?
+     			SELECT * from message where sender = ? or receiver = ?
      		</query>
      	</queries> 
   	</persistence-unit>

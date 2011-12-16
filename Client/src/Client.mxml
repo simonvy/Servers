@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <s:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
 			   xmlns:s="library://ns.adobe.com/flex/spark" 
-			   xmlns:mx="library://ns.adobe.com/flex/mx" minWidth="955" minHeight="600" width="617" height="420">	
+			   xmlns:mx="library://ns.adobe.com/flex/mx" minWidth="955" minHeight="600" width="617" height="420" creationComplete="init()">	
 	<fx:Script>
 		<![CDATA[
 			import flash.events.ErrorEvent;
@@ -14,25 +14,24 @@
 			import mx.controls.Alert;
 			
 			private var procedures:Object = this;
-			private var socket:Socket;
+			private var socket:Socket = new Socket;
 			private var blockedMsg:Array = new Array;
 			
-			private function connect():void {
-				if (socket == null) {
-					socket = new Socket;
-					this.socket.endian = Endian.LITTLE_ENDIAN;
-					this.socket.addEventListener(Event.CONNECT, connected);
-					this.socket.addEventListener(Event.CLOSE, closed);
-					this.socket.addEventListener(IOErrorEvent.IO_ERROR, error);
-					this.socket.addEventListener(ProgressEvent.SOCKET_DATA, recvData);
-				}
-				this.socket.connect("127.0.0.1", 6668);
+			private function init():void {
+				trace("init");
+				this.textInput.addEventListener(KeyboardEvent.KEY_DOWN, onKeyDown);
+				
+				this.socket.endian = Endian.LITTLE_ENDIAN;
+				this.socket.addEventListener(Event.CONNECT, connected);
+				this.socket.addEventListener(Event.CLOSE, closed);
+				this.socket.addEventListener(IOErrorEvent.IO_ERROR, error);
+				this.socket.addEventListener(ProgressEvent.SOCKET_DATA, recvData);
 			}
 			
 			private function login(): void {
 				if (this.loginBtn.label == "Login") {
-					if (socket == null || !socket.connected) {
-						connect();
+					if (!socket.connected) {
+						this.socket.connect("127.0.0.1", 6668);
 					}
 					var user:String = this.user.text;
 					var pwd:String = this.password.text;
@@ -42,14 +41,17 @@
 						this.user.enabled = false;
 						this.password.enabled = false;
 						this.loginBtn.enabled = false;
+						this.password.text = "";
 					}	
 				} else if (this.loginBtn.label == "Logout") {
 					this.socket.close();
+					closed(null);
 				}
 			}
 			
 			private var self:Buddy = null;
 			private var buddies:Array = new Array;
+			private var messages:Array = new Array;
 			
 			private function loginSucceed(buddy:Buddy, allBuddies:Array): void {
 				self = buddy;
@@ -75,24 +77,69 @@
 			}
 			
 			private function setMessages(messages:Array):void {
-				var array:ArrayCollection = new ArrayCollection;
-				for each(var message:Message in messages) {
-					array.addItem("[" + message.from + "] -> [" + message.to + "] " + message.message); 
-				}
-				this.messageList.dataProvider = array;
+				this.messages = messages;
+				updateMessages();
 			}
 			
-			private function addMessage(from:Buddy, to:Buddy, content:String):void {
-				var array:ArrayCollection = this.messageList.dataProvider as ArrayCollection;
-				array.addItem("[" + from + "] -> [" + to + "] " + content);
+			private function addBuddy(buddy:Buddy): void {
+				if (buddies != null) {
+					buddies.push(buddy);
+					updateBuddies();
+					updateMessages();
+				}
+			}
+			
+			private function removeBuddy(buddy:Buddy): void {
+				if (buddies != null) {
+					for (var i:int = 0; i < buddies.length; i++) {
+						var b:Buddy = buddies[i] as Buddy;
+						if (b != null && b.id == buddy.id) {
+							buddies[i] = null;
+						}
+					}
+					updateBuddies();
+				}
 			}
 			
 			private function updateBuddies():void {
 				var array:ArrayCollection = new ArrayCollection;
 				for each(var buddy:Buddy in buddies) {
-					array.addItem(buddy.name); 
+					if (buddy != null) {
+						array.addItem(buddy.name); 	
+					}
 				}
 				this.buddyList.dataProvider = array;
+			}
+			
+			private function addMessage(message:Message):void {
+				messages.push(message);
+				var array:ArrayCollection = this.messageList.dataProvider as ArrayCollection;
+				array.addItem("[" + getBuddyName(message.sender) + "] -> [" + getBuddyName(message.receiver) + "] " + message.text);
+				
+				this.messageList.validateNow();
+				this.messageList.ensureIndexIsVisible(messages.length - 1);
+			}
+			
+			private function updateMessages():void {
+				var array:ArrayCollection = new ArrayCollection;
+				for each(var message:Message in messages) {
+					array.addItem("[" + getBuddyName(message.sender) + "] -> [" + getBuddyName(message.receiver) + "] " + message.text); 
+				}
+				this.messageList.dataProvider = array;
+				this.messageList.validateNow();
+				this.messageList.ensureIndexIsVisible(array.length - 1);
+			}
+			
+			private function getBuddyName(buddyId:int):String {
+				if (this.self != null && this.self.id == buddyId) {
+					return "me";
+				}
+				for each (var buddy:Buddy in buddies) {
+					if (buddy != null && buddy.id == buddyId) {
+						return buddy.name;
+					}
+				}
+				return "" + buddyId;
 			}
 			
 			private function send(): void {
@@ -101,10 +148,17 @@
 					if (content.length > 0) {
 						var index:int = this.buddyList.selectedIndex;
 						var buddy:Buddy = buddies[index];
-						call("talk", [self, buddy, content]);	
+						call("talk", [self, buddy, content]);
+						this.textInput.text = "";
 					}
 				} else {
 					Alert.show("who do you want to chat with?", "ERROR");
+				}
+			}
+			
+			private function onKeyDown(e:KeyboardEvent):void {
+				if (e.keyCode == 13) { // enter
+					this.send();
 				}
 			}
 			
@@ -141,6 +195,13 @@
 			private function closed(event:Event):void {
 				this.sendBtn.enabled = false;
 				this.textInput.enabled = false;
+				
+				this.self = null;
+				this.buddies = new Array;
+				this.messages = new Array;
+				
+				this.updateBuddies();
+				this.updateMessages();
 				
 				this.user.enabled = true;
 				this.password.enabled = true;

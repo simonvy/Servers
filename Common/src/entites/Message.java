@@ -10,35 +10,39 @@ import javax.persistence.Table;
 public class Message implements Serializable {
 	
 	@Column @GeneratedValue private Integer id;
-	@Column private Integer from;
-	@Column private Integer to;
+	@Column private Integer sender;
+	@Column private Integer receiver;
 	@Column private String text;
 	
 	public Integer getId() {
 		return id;
 	}
+	
 	public void setId(Integer id) {
 		this.id = id;
-	}
-	
-	public Integer getFrom() {
-		return from;
-	}
-	public void setFrom(Integer from) {
-		this.from = from;
-	}
-	
-	public Integer getTo() {
-		return to;
-	}
-	public void setTo(Integer to) {
-		this.to = to;
 	}
 	
 	public String getText() {
 		return text;
 	}
+	
 	public void setText(String text) {
 		this.text = text;
+	}
+
+	public Integer getSender() {
+		return sender;
+	}
+
+	public void setSender(Integer sender) {
+		this.sender = sender;
+	}
+
+	public Integer getReceiver() {
+		return receiver;
+	}
+
+	public void setReceiver(Integer receiver) {
+		this.receiver = receiver;
 	}
 }
