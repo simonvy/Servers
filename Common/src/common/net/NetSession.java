@@ -33,8 +33,7 @@ public class NetSession {
 		return this.channel;
 	}
 	
-	public void close() {
-		ChannelFuture closeFuture = channel.close();
-		closeFuture.awaitUninterruptibly();
+	public ChannelFuture close() {
+		return channel.close();
 	}
 }

@@ -1,6 +1,7 @@
 package net;
 
 import java.net.InetSocketAddress;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.jboss.netty.bootstrap.ClientBootstrap;
@@ -30,9 +31,14 @@ public class SceneServer extends Server {
 	private ServerBootstrap policyServer;
 	private Channel policyChannel;
 	
-	public SceneServer() {		
+	public SceneServer() {
+		ExecutorService defaultExecutors = Executors.newCachedThreadPool();
+		
 		database = new ClientBootstrap(new NioClientSocketChannelFactory(
-				Executors.newCachedThreadPool(), Executors.newCachedThreadPool()
+				defaultExecutors, defaultExecutors
+		));
+		policyServer = new ServerBootstrap(new NioServerSocketChannelFactory(
+				defaultExecutors, defaultExecutors
 		));
 		
 		database.setOption("tcpNoDelay", true);
@@ -40,13 +46,19 @@ public class SceneServer extends Server {
 		database.setOption("bufferFactory", HeapChannelBufferFactory.getInstance(Server.BYTE_ORDER));
 		
 		database.setPipelineFactory(super.clientChannelPipelineFactory(this));
-		
-		policyServer = new ServerBootstrap(new NioServerSocketChannelFactory(
-				Executors.newCachedThreadPool(), Executors.newCachedThreadPool()
-		));
-		policyServer.setPipeline(Channels.pipeline(
-				new FixedLengthFrameDecoder(22),  // <policy-file-request/>
-				new PolicyRequestHandler()));
+		policyServer.setPipelineFactory(this.policyChannelPipelineFactory(this));
+	}
+	
+	private ChannelPipelineFactory policyChannelPipelineFactory(final Server host) {
+		return new ChannelPipelineFactory() {
+			@Override
+			public ChannelPipeline getPipeline() throws Exception {
+				return Channels.pipeline(
+					new FixedLengthFrameDecoder(22),  // <policy-file-request/>
+					new PolicyRequestHandler()
+				);
+			}
+		};
 	}
 	
 	@Override
@@ -128,15 +140,11 @@ public class SceneServer extends Server {
 	public void stop() {
 		super.stop();
 		if (dbSession != null) {
-			dbSession.close();
+			dbSession.close().awaitUninterruptibly();
 		}
 		if (policyChannel != null) {
-			policyChannel.close().addListener(new ChannelFutureListener() {
-				@Override
-				public void operationComplete(ChannelFuture future) throws Exception {
-					policyServer.releaseExternalResources();
-				}
-			});
+			policyChannel.close().awaitUninterruptibly();
+			policyServer.releaseExternalResources();
 		}
 		System.out.println("> server stopped.");
 	}
