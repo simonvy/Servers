@@ -1,1 +1,7 @@
+Two Java servers(based on netty) and one ActionScript client.
 
+Server A handles the database access.
+Server B handles the client communicate.
+Server A and Server B communites with each other by object stream within frames based on length.
+
+The client communicates with Server B by AMF3 stream within frames based on length.
