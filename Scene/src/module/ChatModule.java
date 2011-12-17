@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import net.SceneServer;
+import net.DatabaseClient;
 
 import common.Context;
 import common.net.NetSession;
@@ -139,7 +139,7 @@ public class ChatModule {
 	}
 	
 	private NetSession getDbSession() {
-		SceneServer server = Context.instance().get(SceneServer.class);
-		return server.getDbSession();
+		DatabaseClient database = Context.instance().get(DatabaseClient.class);
+		return database.getDbSession();
 	}
 }

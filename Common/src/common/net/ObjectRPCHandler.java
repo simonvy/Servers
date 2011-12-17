@@ -14,10 +14,10 @@ import org.jboss.netty.channel.SimpleChannelHandler;
 
 public class ObjectRPCHandler extends SimpleChannelHandler {
 
-	private Server server;
-
-	public ObjectRPCHandler(Server server) {
-		this.server = server;
+	private APCHost host;
+		
+	public ObjectRPCHandler(APCHost host) {
+		this.host = host;
 	}
 	
 	@Override
@@ -27,7 +27,7 @@ public class ObjectRPCHandler extends SimpleChannelHandler {
 		
 		try {
 			APC rpc = (APC) input.readObject();
-			server.invokeProcedure(e.getChannel(), rpc);
+			host.invokeProcedure(e.getChannel(), rpc);
 		} catch(Exception exc) {
 			System.err.println(exc.getMessage());
 			e.getChannel().close();

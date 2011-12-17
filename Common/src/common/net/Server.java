@@ -4,15 +4,12 @@ import java.net.InetSocketAddress;
 import java.nio.ByteOrder;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import org.jboss.netty.bootstrap.Bootstrap;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.buffer.HeapChannelBufferFactory;
 import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFactory;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
@@ -21,34 +18,31 @@ import org.jboss.netty.channel.group.DefaultChannelGroup;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 
-public class Server {
+public class Server implements APCHost {
 	// use little endian, default is big endian.
 	public static final ByteOrder BYTE_ORDER = ByteOrder.LITTLE_ENDIAN;
 	
 	private ChannelGroup clients = new DefaultChannelGroup("client-channels");
 	private Map<Integer, NetSession> sessions = new HashMap<Integer, NetSession>();
 	
-	private ExecutorService rpcExecutor;
 	private AsynchronousProcedureQueue rpcManager;
 	
 	private int port;
-	private ServerBootstrap serverStrap;
 	private Channel serverChannel;
+	private ServerBootstrap server;
 	
 	public Server() {
-		ChannelFactory factory = new NioServerSocketChannelFactory(
-				Executors.newCachedThreadPool(), // for boss 
-				Executors.newCachedThreadPool()); // for read/write worker
+		this.rpcManager = new AsynchronousProcedureQueue();
 		
-		serverStrap = new ServerBootstrap(factory);
+		this.server = new ServerBootstrap(new NioServerSocketChannelFactory(
+				Executors.newCachedThreadPool(),	// for boss 
+				Executors.newCachedThreadPool()		// for read/write worker
+		));
 		
-		setOptions(serverStrap);
+		setOptions(this.server);
 		
 		// the pipeline is for the children channels.
-		serverStrap.setPipelineFactory(clientChannelPipelineFactory(this));
-		
-		rpcExecutor = Executors.newFixedThreadPool(1);
-		rpcManager = new AsynchronousProcedureQueue(rpcExecutor);
+		server.setPipelineFactory(clientChannelPipelineFactory());
 	}
 	
 	protected void setOptions(Bootstrap s) {
@@ -58,7 +52,8 @@ public class Server {
 		s.setOption("child.bufferFactory", HeapChannelBufferFactory.getInstance(BYTE_ORDER));
 	}
 	
-	protected ChannelPipelineFactory clientChannelPipelineFactory(final Server host) {
+	protected ChannelPipelineFactory clientChannelPipelineFactory() {
+		final Server host = this;
 		return new ChannelPipelineFactory() {
 			@Override
 			public ChannelPipeline getPipeline() throws Exception {
@@ -71,26 +66,22 @@ public class Server {
 		};
 	}
 	
-	public void start(int port) {
+	public void start(int port, int nExecutors) {
 		this.port = port;
-		this.serverChannel = this.serverStrap.bind(new InetSocketAddress(this.port));
+		this.rpcManager.initExecutors(nExecutors);
+		this.serverChannel = this.server.bind(new InetSocketAddress(this.port));
 	}
 	
-	public void stop() {
+	public void shutdown() {
 		this.clients.close().awaitUninterruptibly();
-		this.serverStrap.releaseExternalResources();
-		this.serverChannel.close().awaitUninterruptibly();
-		
-		this.rpcExecutor.shutdown();
-		while(!this.rpcExecutor.isShutdown()) {
-			try {
-				this.rpcExecutor.awaitTermination(Integer.MAX_VALUE, TimeUnit.SECONDS);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
+		if (this.serverChannel != null) {
+			this.serverChannel.close().awaitUninterruptibly();
 		}
+		this.server.releaseExternalResources();
+		this.rpcManager.shutdown();
 	}
 	
+	@Override
 	public void invokeProcedure(Channel channel, APC apc) {
 		NetSession session = null;
 		if (channel != null) {
@@ -100,24 +91,28 @@ public class Server {
 		rpcManager.invokeProcedure(session, apc);
 	}
 	
+	@Override
 	public void registerProcedures(Class<?> clazz) {
 		rpcManager.registerProcedures(clazz);
 	}
 	
 	public void addChildChannel(Channel child) {
-		NetSession session = new NetSession(child.getId(), child);
-		synchronized(sessions) {
-			clients.add(child);
-			sessions.put(session.getId(), session);
+		if (child != null) {
+			NetSession session = new NetSession(child.getId(), child);
+			synchronized(sessions) {
+				clients.add(child);
+				sessions.put(session.getId(), session);
+			}
 		}
 	}
 	
 	public void removeChildChannel(Channel child) {
 		synchronized(sessions) {
-			if (sessions.containsKey(child.getId())) {
+			if (child != null && sessions.containsKey(child.getId())) {
 				// fire a disconnected apc so that module can handle this
 				APC apc = new APC();
 				apc.setFunctionName("disconnected");
+				apc.setParameters(new Object[1]);
 				invokeProcedure(child, apc);
 				
 				clients.remove(child);
@@ -128,9 +123,6 @@ public class Server {
 	
 	public Channel getChildChannel(int channelId) {
 		NetSession session = sessions.get(channelId);
-		if (session != null) {
-			return session.getChannel();
-		}
-		return null;
+		return session != null ? session.getChannel() : null;
 	}
 }

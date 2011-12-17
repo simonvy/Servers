@@ -1,151 +1,72 @@
 package net;
 
-import java.net.InetSocketAddress;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import org.jboss.netty.bootstrap.ClientBootstrap;
-import org.jboss.netty.bootstrap.ServerBootstrap;
-import org.jboss.netty.buffer.HeapChannelBufferFactory;
-import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
-import org.jboss.netty.channel.ChannelFutureListener;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBufferInputStream;
+import org.jboss.netty.buffer.ChannelBufferOutputStream;
+import org.jboss.netty.buffer.ChannelBuffers;
+import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
-import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
-import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
-import org.jboss.netty.handler.codec.frame.FixedLengthFrameDecoder;
+import org.jboss.netty.channel.MessageEvent;
+import org.jboss.netty.channel.SimpleChannelHandler;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 
 import common.net.APC;
-import common.net.NetSession;
 import common.net.Server;
 import common.net.SessionHandler;
+import flex.messaging.io.SerializationContext;
+import flex.messaging.io.amf.Amf3Input;
+import flex.messaging.io.amf.Amf3Output;
 
 public class SceneServer extends Server {
 	
-	private NetSession dbSession;
-	private ClientBootstrap database;
-	
-	private ServerBootstrap policyServer;
-	private Channel policyChannel;
-	
-	public SceneServer() {
-		ExecutorService defaultExecutors = Executors.newCachedThreadPool();
-		
-		database = new ClientBootstrap(new NioClientSocketChannelFactory(
-				defaultExecutors, defaultExecutors
-		));
-		policyServer = new ServerBootstrap(new NioServerSocketChannelFactory(
-				defaultExecutors, defaultExecutors
-		));
-		
-		database.setOption("tcpNoDelay", true);
-		database.setOption("keepAlive", true);
-		database.setOption("bufferFactory", HeapChannelBufferFactory.getInstance(Server.BYTE_ORDER));
-		
-		database.setPipelineFactory(super.clientChannelPipelineFactory(this));
-		policyServer.setPipelineFactory(this.policyChannelPipelineFactory(this));
-	}
-	
-	private ChannelPipelineFactory policyChannelPipelineFactory(final Server host) {
-		return new ChannelPipelineFactory() {
-			@Override
-			public ChannelPipeline getPipeline() throws Exception {
-				return Channels.pipeline(
-					new FixedLengthFrameDecoder(22),  // <policy-file-request/>
-					new PolicyRequestHandler()
-				);
-			}
-		};
-	}
-	
 	@Override
-	protected ChannelPipelineFactory clientChannelPipelineFactory(final Server host) {
+	protected ChannelPipelineFactory clientChannelPipelineFactory() {
+		final Server host = this;
 		return new ChannelPipelineFactory() {
 			@Override
 			public ChannelPipeline getPipeline() throws Exception {
 				return Channels.pipeline(
 					new SessionHandler(host),
 					new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
-					new Amf3RPCHandler(host)
+					new Amf3RPCHandler()
 				);
 			}
 		};
 	}
 	
-	public void start(final int port, final int pport, String db, int dbport) {
-		ChannelFuture future = this.database.connect(new InetSocketAddress(db, dbport));
-		future.addListener(new ChannelFutureListener() {
-			@Override
-			public void operationComplete(ChannelFuture future) throws Exception {
-				if (future.isSuccess()) {
-					databaseChannelConnected(future.getChannel());
-					start(port);
-					// start policy server
-					policyChannel = policyServer.bind(new InetSocketAddress(pport));
-					System.out.println("> server started.");
-				} else {
-					System.out.println("> cannot connect database.");
-				}
+	private class Amf3RPCHandler extends SimpleChannelHandler {
+		
+		@Override
+		public void messageReceived(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
+			ChannelBuffer buffer = (ChannelBuffer)e.getMessage();
+			Amf3Input input = new Amf3Input(new SerializationContext());		
+			input.setInputStream(new ChannelBufferInputStream(buffer));
+			try {
+				APC rpc = (APC) input.readObject();
+				invokeProcedure(e.getChannel(), rpc);
+			} catch(Exception exc) {
+				System.err.println(exc.getMessage());
+				e.getChannel().close();
 			}
-		});
-	}
-	
-	private void databaseChannelConnected(Channel dbChannel) {
-		// when db channel is connected, netty will first fire channel open event,
-		// then set the connection future completed.
-		// as a result, when this method is called, db channel has already been added into the client pool,
-		// Have to remove it.
-		super.removeChildChannel(dbChannel);
-		this.dbSession = new DbSession(dbChannel.getId(), dbChannel);
-		System.out.println("> database is connected.");
-	}
-	
-	@Override
-	public void removeChildChannel(Channel child) {
-		if (dbSession != null && dbSession.getId() == child.getId()) {
-			this.dbSession = null;
-			System.out.println("> database is disconnected.");
-		} else {
-			super.removeChildChannel(child);
-		}
-	}
-	
-	public NetSession getDbSession() {
-		return dbSession;
-	}
-	
-	@Override
-	public void invokeProcedure(Channel channel, APC apc) {
-		if (dbSession != null && dbSession.getId() == channel.getId()) {
-			// always use the last parameter as the client id
-			Object[] params = apc.getParameters();
-			if (params != null && params.length > 0) {
-				Object first = params[0];
-				if (first instanceof Integer) {
-					Channel client = super.getChildChannel((Integer)first);
-					super.invokeProcedure(client, apc);
-					return;
-				}
-			}
-			super.invokeProcedure(null, apc);
-		} else {
-			super.invokeProcedure(channel, apc);
-		}
-	}
-	
-	@Override
-	public void stop() {
-		super.stop();
-		if (dbSession != null) {
-			dbSession.close().awaitUninterruptibly();
-		}
-		if (policyChannel != null) {
-			policyChannel.close().awaitUninterruptibly();
-			policyServer.releaseExternalResources();
-		}
-		System.out.println("> server stopped.");
+	    }
+		
+		@Override
+		public void writeRequested(ChannelHandlerContext ctx, MessageEvent e) throws Exception {
+			ChannelBufferOutputStream bout = 
+					new ChannelBufferOutputStream(ChannelBuffers.dynamicBuffer(
+							4 * 1024, ctx.getChannel().getConfig().getBufferFactory()));
+			bout.write(new byte[4]); // reserved for the length
+			Amf3Output out = new Amf3Output(new SerializationContext());
+			out.setOutputStream(bout);
+			out.writeObject(e.getMessage());
+			out.flush();
+			out.close();
+			
+			ChannelBuffer encoded = bout.buffer();
+	        encoded.setInt(0, encoded.writerIndex() - 4);
+	        Channels.write(ctx, e.getFuture(), encoded);
+	    }
 	}
 }

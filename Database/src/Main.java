@@ -18,24 +18,24 @@ public class Main {
 		
 		try {
 			ssf.setupDefault();
-			server.start(6669);
+			server.start(6669, 1);
 			
-			System.out.println("> Database started!");
+			System.out.println("> Database started.");
 			
 			synchronized(server) {
 				server.wait();
 			}
 			
-		} catch (InterruptedException e) {
+		} catch (Exception e) {
 			e.printStackTrace(System.err);
 		} finally {
-			server.stop();
+			server.shutdown();
 			try {
 				ssf.close();
 			} catch (SQLException e) {
 				e.printStackTrace(System.err);
 			}
-			System.out.println("> Database stopped!");
+			System.out.println("> Database stopped.");
 		}
 	}
 

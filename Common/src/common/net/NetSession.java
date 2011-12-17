@@ -1,7 +1,6 @@
 package common.net;
 
 import org.jboss.netty.channel.Channel;
-import org.jboss.netty.channel.ChannelFuture;
 
 public class NetSession {
 
@@ -31,9 +30,5 @@ public class NetSession {
 	
 	public Channel getChannel() {
 		return this.channel;
-	}
-	
-	public ChannelFuture close() {
-		return channel.close();
 	}
 }

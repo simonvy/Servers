@@ -41,7 +41,7 @@ public class SessionHandler extends SimpleChannelHandler {
 				e.getChannel().close();
 			}
 		} else {
-			cause.printStackTrace();
+			cause.printStackTrace(System.err);
 		}
 	}
 }

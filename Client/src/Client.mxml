@@ -13,7 +13,7 @@
 			import mx.collections.ArrayCollection;
 			import mx.controls.Alert;
 			
-			private const host:String = "192.168.0.81";
+			private const host:String = "localhost";
 			private var procedures:Object = this;
 			private var socket:Socket = new Socket;
 			private var blockedMsg:Array = new Array;
