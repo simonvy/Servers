@@ -177,9 +177,7 @@
 				bytes.writeObject(apc);
 				
 				if (this.socket != null && this.socket.connected) {
-					this.socket.writeInt(bytes.length);
-					this.socket.writeBytes(bytes);	
-					this.socket.flush();
+					sendBytes(bytes);
 				} else {
 					this.blockedMsg.push(bytes);
 				}
@@ -188,15 +186,20 @@
 			private function connected(event:Event):void {
 				while(this.blockedMsg.length > 0) {
 					var bytes:ByteArray = this.blockedMsg.pop() as ByteArray;
-					this.socket.writeInt(bytes.length);
-					this.socket.writeBytes(bytes);
-					this.socket.flush();
+					sendBytes(bytes);
 				}
+			}
+			
+			private function sendBytes(bytes:ByteArray):void {
+				this.socket.writeInt(bytes.length);
+				this.socket.writeBytes(bytes);
+				this.socket.flush();
 			}
 			
 			private function closed(event:Event):void {
 				this.sendBtn.enabled = false;
 				this.textInput.enabled = false;
+				this.loginBtn.enabled = true;
 				
 				this.self = null;
 				this.buddies = new Array;

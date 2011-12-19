@@ -30,6 +30,9 @@ public class Server implements APCHost {
 	private int port;
 	private Channel serverChannel;
 	private ServerBootstrap server;
+	// the max length of the frame.
+	// if the frame of the length is too long, then TooLongFrameException will be thrown immediately, which will be caught in SessionHandler.
+	private int maxFrameLength = Integer.MAX_VALUE;
 	
 	public Server() {
 		this.rpcManager = new AsynchronousProcedureQueue();
@@ -59,7 +62,7 @@ public class Server implements APCHost {
 			public ChannelPipeline getPipeline() throws Exception {
 				return Channels.pipeline(
 					new SessionHandler(host),
-					new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
+					new LengthFieldBasedFrameDecoder(host.maxFrameLength, 0, 4, 0, 4, true),
 					new ObjectRPCHandler(host)
 				);
 			}
@@ -124,5 +127,12 @@ public class Server implements APCHost {
 	public Channel getChildChannel(int channelId) {
 		NetSession session = sessions.get(channelId);
 		return session != null ? session.getChannel() : null;
+	}
+	
+	public void setMaxFrameLength(int maxFrameLength) {
+		if (maxFrameLength <= 4) {
+			throw new IllegalStateException("the max length of frame is too short.");
+		}
+		this.maxFrameLength = maxFrameLength;
 	}
 }

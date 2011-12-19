@@ -4,6 +4,7 @@ import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -126,6 +127,8 @@ public class SqlSession implements EntityManager {
 				stmt.setDouble(i, (Double)param);
 			} else if (param instanceof Date) {
 				stmt.setDate(i, (Date)param);
+			} else if (param == null) {
+				stmt.setNull(i, Types.OTHER);
 			} else {
 				System.err.println("unknown parameter: " + param);
 			}

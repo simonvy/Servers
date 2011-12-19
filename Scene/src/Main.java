@@ -20,7 +20,7 @@ public class Main {
 		try {
 			database.start("localhost", 6669);
 			server.start(6668, 1);
-			policy.start(8430, 0);
+			policy.start(843, 0);
 			
 			System.out.println("> Server started.");
 			

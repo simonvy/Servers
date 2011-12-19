@@ -21,19 +21,28 @@ import flex.messaging.io.amf.Amf3Output;
 
 public class SceneServer extends Server {
 	
+	private int maxFrameLength = Integer.MAX_VALUE;
+	
 	@Override
 	protected ChannelPipelineFactory clientChannelPipelineFactory() {
-		final Server host = this;
+		final SceneServer host = this;
 		return new ChannelPipelineFactory() {
 			@Override
 			public ChannelPipeline getPipeline() throws Exception {
 				return Channels.pipeline(
 					new SessionHandler(host),
-					new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
+					new LengthFieldBasedFrameDecoder(host.maxFrameLength, 0, 4, 0, 4, true),
 					new Amf3RPCHandler()
 				);
 			}
 		};
+	}
+	
+	public void setMaxFrameLength(int maxFrameLength) {
+		if (maxFrameLength <= 4) {
+			throw new IllegalStateException("the max length of frame is too short.");
+		}
+		this.maxFrameLength = maxFrameLength;
 	}
 	
 	private class Amf3RPCHandler extends SimpleChannelHandler {
