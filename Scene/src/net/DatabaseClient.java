@@ -10,7 +10,10 @@ import org.jboss.netty.buffer.HeapChannelBufferFactory;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
+import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.Channels;
+import org.jboss.netty.channel.ExceptionEvent;
+import org.jboss.netty.channel.SimpleChannelHandler;
 import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
 import org.jboss.netty.handler.codec.frame.LengthFieldBasedFrameDecoder;
 
@@ -37,6 +40,7 @@ public class DatabaseClient implements APCHost {
 		setOptions(dbClient);
 		
 		dbClient.setPipeline(Channels.pipeline(
+			new ExceptionHandler(),
 			new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4),
 			new ObjectRPCHandler(this)
 		));
@@ -74,17 +78,19 @@ public class DatabaseClient implements APCHost {
 	@Override
 	public void invokeProcedure(Channel channel, APC apc) {
 		SceneServer server = Context.instance().get(SceneServer.class);
-		// always use the first parameter as the client id
-		Object[] params = apc.getParameters();
-		if (params != null && params.length > 0) {
-			Object first = params[0];
-			if (first instanceof Integer) {
-				Channel client = server.getChildChannel((Integer)first);
-				server.invokeProcedure(client, apc);
-				return;
+		if (server != null) {
+			// always use the first parameter as the client id
+			Object[] params = apc.getParameters();
+			if (params != null && params.length > 0) {
+				Object first = params[0];
+				if (first instanceof Integer) {
+					Channel client = server.getChildChannel((Integer)first);
+					server.invokeProcedure(client, apc);
+					return;
+				}
 			}
+			server.invokeProcedure(null, apc);
 		}
-		server.invokeProcedure(null, apc);
 	}
 	
 	@Override
@@ -95,5 +101,12 @@ public class DatabaseClient implements APCHost {
 	
 	public NetSession getDbSession() {
 		return new DbSession(clientChannel.getId(), clientChannel);
+	}
+	
+	private class ExceptionHandler extends SimpleChannelHandler {
+		@Override
+		public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) {
+			e.getCause().printStackTrace(System.err);
+		}
 	}
 }

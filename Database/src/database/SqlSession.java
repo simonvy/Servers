@@ -1,8 +1,8 @@
 package database;
 
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.ArrayList;
@@ -79,21 +79,27 @@ public class SqlSession implements EntityManager {
 		}
 	}
 	
-	public <T> List<T> find(String queryName, Class<T> entityClass, Object... params) {
+	public <T> List<T> find(String namedQuery, Class<T> entityClass, Object...params) {
 		List<T> result = new ArrayList<T>();
 		EntityMeta meta = factory.getEntityMeta(entityClass);
 		
 		try {
-			PreparedStatement stmt = factory.getNamedStatement(queryName);
+			PreparedStatement stmt = factory.getNamedStatement(namedQuery);
 			parameterize(stmt, params);
 			try {
 				ResultSet rs = stmt.executeQuery();
+				ResultSetMetaData rsMeta = rs.getMetaData();
 				while (rs.next()) {
 					T host = entityClass.newInstance();
-					for (String column : meta.getColumns()) {
-						Class<?> type = meta.getColumnType(column);
-						Object value = castValue(rs, column, type);
-						meta.setValue(host, column, value);
+					for (int i = 1; i <= rsMeta.getColumnCount(); i++) {
+						String column = rsMeta.getColumnName(i);
+						if (meta.hasColumn(column)) {
+							Object value = rs.getObject(i);
+							int columnType = rsMeta.getColumnType(i);
+							Class<?> expectedType = meta.getColumnType(column);
+							value = castValue(value, columnType, expectedType);
+							meta.setValue(host, column, value);
+						}
 					}
 					result.add(host);
 				}
@@ -123,10 +129,6 @@ public class SqlSession implements EntityManager {
 				stmt.setInt(i, (Integer)param);
 			} else if (param instanceof String) {
 				stmt.setString(i, (String)param);
-			} else if (param instanceof Double) {
-				stmt.setDouble(i, (Double)param);
-			} else if (param instanceof Date) {
-				stmt.setDate(i, (Date)param);
 			} else if (param == null) {
 				stmt.setNull(i, Types.OTHER);
 			} else {
@@ -135,19 +137,18 @@ public class SqlSession implements EntityManager {
 		}
 	}
 	
-	private Object castValue(ResultSet rs, String column, Class<?> type) throws SQLException {
-		if (type == Integer.class) {
-			return rs.getInt(column);
-		} else if (type == String.class) {
-			return rs.getString(column);
-		} else if (type == Double.class) {
-			return rs.getDouble(column);
-		} else if (type == Date.class) {
-			return rs.getDate(column);
-		} else {
-			System.err.println("unknown column type: " + type);
+	private Object castValue(Object value, int type, Class<?> expectedType) {
+		switch(type) {
+		case Types.NULL:
+			return null;
+		case Types.INTEGER:
+			if (value instanceof Long && expectedType == Integer.class) {
+				value = ((Long)value).intValue();
+			}
+			return value;
+		default:
+			return value;
 		}
-		return null;
 	}
 	
 	@Override

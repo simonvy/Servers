@@ -62,6 +62,10 @@ public class EntityMeta {
 		return columns.keySet();
 	}
 	
+	public boolean hasColumn(String column) {
+		return column != null && columns.containsKey(column);
+	}
+	
 	public Class<?> getColumnType(String column) {
 		if (!columns.containsKey(column)) {
 			return null;
